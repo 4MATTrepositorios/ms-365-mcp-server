@@ -9,6 +9,7 @@ import type { CommandOptions } from '../src/cli.js';
 import {
   isRejectedAssertion,
   oboAllowlistRefusal,
+  readCallerAllowlist,
   readOboAllowlist,
 } from '../src/lib/obo-access.js';
 
@@ -218,5 +219,74 @@ describe('--obo /mcp: 401 on a rejected assertion, 403 outside the allowlist (#6
     await start();
     expect((await listTools(jwt({ tid: TENANT_B, oid: 'anyone' }))).status).toBe(200);
     expect(exchange).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('pass-through bearer /mcp: caller allowlist without --obo (MS365_MCP_ALLOWED_TENANTS)', () => {
+  const savedEnv = { ...process.env };
+  let started: MicrosoftGraphServer[] = [];
+  let port: number;
+
+  async function start(env: Record<string, string> = {}): Promise<void> {
+    Object.assign(process.env, env);
+    clearSecretsCache();
+    port = await freePort();
+    const options: CommandOptions = { http: `127.0.0.1:${port}` };
+    const server = new MicrosoftGraphServer(fakeAuthManager(), options);
+    await server.initialize('0.0.0-test');
+    started.push(server);
+    await server.start();
+  }
+
+  function listTools(token: string): Promise<Response> {
+    return fetch(`http://127.0.0.1:${port}/mcp`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }),
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.MS365_MCP_RATE_LIMIT_DISABLED = 'true';
+    delete process.env.MS365_MCP_ALLOWED_TENANTS;
+    delete process.env.MS365_MCP_ALLOWED_USERS;
+    delete process.env.MS365_MCP_OBO_ALLOWED_TENANTS;
+    delete process.env.MS365_MCP_OBO_ALLOWED_USERS;
+  });
+
+  afterEach(async () => {
+    for (const server of started) await server.stop();
+    started = [];
+    vi.restoreAllMocks();
+    process.env = { ...savedEnv };
+    clearSecretsCache();
+  });
+
+  it('merges the pass-through and --obo allowlist names', () => {
+    const a = readCallerAllowlist({
+      MS365_MCP_ALLOWED_TENANTS: TENANT_A,
+      MS365_MCP_OBO_ALLOWED_TENANTS: TENANT_B,
+      MS365_MCP_ALLOWED_USERS: 'U1',
+    });
+    expect([...a.tenants].sort()).toEqual([TENANT_A, TENANT_B]);
+    expect([...a.users]).toEqual(['u1']);
+  });
+
+  it('refuses a delegated Graph token from another tenant with 403', async () => {
+    await start({ MS365_MCP_ALLOWED_TENANTS: TENANT_A });
+    const r = await listTools(jwt({ tid: TENANT_B, oid: 'u1' }));
+    expect(r.status).toBe(403);
+    expect(await r.json()).toMatchObject({ error: 'access_denied' });
+  });
+
+  it('serves a delegated Graph token from the allowed tenant', async () => {
+    await start({ MS365_MCP_ALLOWED_TENANTS: TENANT_A });
+    const r = await listTools(jwt({ tid: TENANT_A, oid: 'u1' }));
+    expect(r.status).toBe(200);
   });
 });

@@ -48,7 +48,7 @@ import { buildMcpServerInstructions } from './mcp-instructions.js';
 import { installToolSchemaRefNormalization } from './normalize-tool-schema.js';
 import { MicrosoftOAuthProvider } from './oauth-provider.js';
 import OboClient from './obo-client.js';
-import { isRejectedAssertion, oboAllowlistRefusal, readOboAllowlist } from './lib/obo-access.js';
+import { isRejectedAssertion, oboAllowlistRefusal, readCallerAllowlist } from './lib/obo-access.js';
 import { requestContext } from './request-context.js';
 import { getSecrets, type AppSecrets } from './secrets.js';
 
@@ -1171,11 +1171,14 @@ class MicrosoftGraphServer {
       // Microsoft Graph MCP endpoints with bearer token auth (or pass-through
       // when --trust-proxy-auth is set; see microsoftBearerTokenAuthMiddleware
       // for the AuthManager fallback that makes that mode work).
-      // Optional caller allowlist for --obo (MS365_MCP_OBO_ALLOWED_TENANTS / _USERS).
-      const oboAllowlist = this.oboClient ? readOboAllowlist() : null;
-      if (oboAllowlist && (oboAllowlist.tenants.size > 0 || oboAllowlist.users.size > 0)) {
+      // Optional caller allowlist (MS365_MCP_ALLOWED_TENANTS / _USERS, plus the
+      // MS365_MCP_OBO_ALLOWED_* names). Applies to pass-through bearer tokens too,
+      // not only to --obo assertions: a portal that forwards its users' delegated
+      // Graph tokens needs the same "only our tenant" boundary.
+      const callerAllowlist = this.options.trustProxyAuth ? null : readCallerAllowlist();
+      if (callerAllowlist && (callerAllowlist.tenants.size > 0 || callerAllowlist.users.size > 0)) {
         logger.info(
-          `OBO allowlist: ${oboAllowlist.tenants.size} tenant(s), ${oboAllowlist.users.size} user(s)`
+          `Caller allowlist: ${callerAllowlist.tenants.size} tenant(s), ${callerAllowlist.users.size} user(s)`
         );
       }
       const mcpAuth = microsoftBearerTokenAuthMiddleware({
@@ -1218,13 +1221,13 @@ class MicrosoftGraphServer {
           try {
             if (req.microsoftAuth) {
               let accessToken = req.microsoftAuth.accessToken;
+              const refusal = callerAllowlist && oboAllowlistRefusal(accessToken, callerAllowlist);
+              if (refusal) {
+                logger.warn(`Caller refused by the allowlist: ${refusal}`);
+                res.status(403).json({ error: 'access_denied', error_description: refusal });
+                return;
+              }
               if (this.oboClient) {
-                const refusal = oboAllowlist && oboAllowlistRefusal(accessToken, oboAllowlist);
-                if (refusal) {
-                  logger.warn(`OBO caller refused by the allowlist: ${refusal}`);
-                  res.status(403).json({ error: 'access_denied', error_description: refusal });
-                  return;
-                }
                 try {
                   accessToken = await this.oboClient.exchangeToken(accessToken);
                 } catch (error) {
