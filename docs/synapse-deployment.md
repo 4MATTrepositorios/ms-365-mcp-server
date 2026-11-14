@@ -23,14 +23,15 @@ This fork runs as the **Microsoft 365 (Outlook)** connector of the Synapse porta
 | App   | `ca-mcp-m365-synapse` (`<resource-group>`, env `cae-synapse`, brazilsouth)                                           |
 | URL   | `https://<container-app-fqdn>/mcp`                                                                                   |
 | Image | `ghcr.io/4mattrepositorios/ms-365-mcp-server:sha-<commit>` (private, pulled with the shared ghcr.io registry secret) |
-| Args  | `--http 0.0.0.0:3000 --org-mode --preset outlook`                                                                    |
+| Args  | `--http 0.0.0.0:3000 --org-mode` (the tool list comes from `ENABLED_TOOLS`, not from a preset)                       |
 | Scale | 0 to 3 replicas, 0.5 vCPU / 1 GiB                                                                                    |
 
 Environment (no secrets):
 
 ```
 MS365_MCP_ALLOWED_TENANTS=<4matt-tenant-id>
-MS365_MCP_ALLOWED_SCOPES=User.Read Mail.ReadWrite Mail.Send Calendars.ReadWrite Calendars.Read.Shared Contacts.Read MailboxSettings.Read
+MS365_MCP_ALLOWED_SCOPES=<every Graph scope the enabled tools declare, space separated>
+ENABLED_TOOLS=^(<tool>|<tool>|...)$   # exact names; must match the Synapse m365 tool_allowlist
 MS365_MCP_CLIENT_ID=<synapse-sso-app-id>
 MS365_MCP_TENANT_ID=<4matt-tenant-id>
 MS365_MCP_DISABLE_DCR=true
@@ -59,3 +60,11 @@ az containerapp update -n ca-mcp-m365-synapse -g <resource-group> \
 
 The Synapse side (connector row `m365`, `microsoft_user` auth type, pilot role `outlook`) is
 documented in the Synapse repo under DB-195, OMNI-150 and CMP-92.
+
+## Tool rollout
+
+The tool list lives in two places that must match: `ENABLED_TOOLS` on the container (what the
+server exposes) and the `tool_allowlist` of the `m365` row in Synapse (what the chat offers).
+On 14/11/2026 it went from the 28 Outlook tools to 93 (Outlook, People, Teams chats, channels and
+meetings, OneNote, Microsoft 365 search). New Graph scopes are added to the SSO app's admin
+consent before a block is enabled; a tool whose scope is not consented answers 403.
