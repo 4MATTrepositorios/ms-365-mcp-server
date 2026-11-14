@@ -5,7 +5,7 @@ This fork runs as the **Microsoft 365 (Outlook)** connector of the Synapse porta
 ## How auth works
 
 - Synapse users already sign in with Microsoft (Supabase Auth, Azure provider, app `Supabase`,
-  `e1a1611e-48ea-4df4-b8b7-73a0bbac016e`). Synapse keeps their delegated refresh token and mints a
+  `<synapse-sso-app-id>`). Synapse keeps their delegated refresh token and mints a
   Graph access token per chat turn (`ms-token-refresh`).
 - The Synapse omni-agent sends that **delegated Graph token** as `Authorization: Bearer` to `/mcp`.
   The server runs in plain HTTP mode (no `--obo`): the bearer goes straight to Microsoft Graph, so
@@ -18,24 +18,24 @@ This fork runs as the **Microsoft 365 (Outlook)** connector of the Synapse porta
 
 ## Azure Container App
 
-| Item  | Value                                                                                                                               |
-| ----- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| App   | `ca-mcp-m365-synapse` (`RG-SYNAPSE-PROD`, env `cae-synapse`, brazilsouth)                                                           |
-| URL   | `https://ca-mcp-m365-synapse.icybush-8a13610d.brazilsouth.azurecontainerapps.io/mcp`                                                |
-| Image | `ghcr.io/4mattrepositorios/ms-365-mcp-server:sha-<commit>` (private, pulled with the shared `ghcrio-gustavo-zappi` registry secret) |
-| Args  | `--http 0.0.0.0:3000 --org-mode --preset outlook`                                                                                   |
-| Scale | 0 to 3 replicas, 0.5 vCPU / 1 GiB                                                                                                   |
+| Item  | Value                                                                                                                |
+| ----- | -------------------------------------------------------------------------------------------------------------------- |
+| App   | `ca-mcp-m365-synapse` (`<resource-group>`, env `cae-synapse`, brazilsouth)                                           |
+| URL   | `https://<container-app-fqdn>/mcp`                                                                                   |
+| Image | `ghcr.io/4mattrepositorios/ms-365-mcp-server:sha-<commit>` (private, pulled with the shared ghcr.io registry secret) |
+| Args  | `--http 0.0.0.0:3000 --org-mode --preset outlook`                                                                    |
+| Scale | 0 to 3 replicas, 0.5 vCPU / 1 GiB                                                                                    |
 
 Environment (no secrets):
 
 ```
-MS365_MCP_ALLOWED_TENANTS=6f3fce1c-9d25-40c3-92b6-916e5b6cc676
+MS365_MCP_ALLOWED_TENANTS=<4matt-tenant-id>
 MS365_MCP_ALLOWED_SCOPES=User.Read Mail.ReadWrite Mail.Send Calendars.ReadWrite Calendars.Read.Shared Contacts.Read MailboxSettings.Read
-MS365_MCP_CLIENT_ID=e1a1611e-48ea-4df4-b8b7-73a0bbac016e
-MS365_MCP_TENANT_ID=6f3fce1c-9d25-40c3-92b6-916e5b6cc676
+MS365_MCP_CLIENT_ID=<synapse-sso-app-id>
+MS365_MCP_TENANT_ID=<4matt-tenant-id>
 MS365_MCP_DISABLE_DCR=true
 MS365_MCP_TRUST_PROXY_HOPS=1
-MS365_MCP_PUBLIC_URL=https://ca-mcp-m365-synapse.icybush-8a13610d.brazilsouth.azurecontainerapps.io
+MS365_MCP_PUBLIC_URL=https://<container-app-fqdn>
 MS365_MCP_MAX_TOP=25
 LOG_LEVEL=info
 ```
@@ -45,7 +45,7 @@ LOG_LEVEL=info
 ```bash
 docker build -t ghcr.io/4mattrepositorios/ms-365-mcp-server:sha-$(git rev-parse --short HEAD) .
 docker push ghcr.io/4mattrepositorios/ms-365-mcp-server:sha-$(git rev-parse --short HEAD)
-az containerapp update -n ca-mcp-m365-synapse -g RG-SYNAPSE-PROD \
+az containerapp update -n ca-mcp-m365-synapse -g <resource-group> \
   --image ghcr.io/4mattrepositorios/ms-365-mcp-server:sha-$(git rev-parse --short HEAD)
 ```
 
