@@ -36,6 +36,26 @@ export function readOboAllowlist(
   };
 }
 
+/**
+ * Caller allowlist for every bearer-authenticated /mcp request, with or without --obo.
+ *
+ * Pass-through deployments (a portal that already holds the user's delegated Graph
+ * token and sends it as the bearer) have no exchange to stop a foreign token, so
+ * MS365_MCP_ALLOWED_TENANTS / MS365_MCP_ALLOWED_USERS apply there too. Under --obo
+ * the MS365_MCP_OBO_ALLOWED_* names keep working; both sets are merged. The claims
+ * are read unverified, which is safe: Graph verifies the token on every call, and a
+ * token that lies about its tid to pass this list is rejected there.
+ */
+export function readCallerAllowlist(
+  env: Record<string, string | undefined> = process.env
+): OboAllowlist {
+  const obo = readOboAllowlist(env);
+  return {
+    tenants: new Set([...obo.tenants, ...splitList(env.MS365_MCP_ALLOWED_TENANTS)]),
+    users: new Set([...obo.users, ...splitList(env.MS365_MCP_ALLOWED_USERS)]),
+  };
+}
+
 function readClaims(token: string): Record<string, unknown> | undefined {
   const parts = token.split('.');
   if (parts.length !== 3) return undefined;
