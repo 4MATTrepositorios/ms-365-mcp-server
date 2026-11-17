@@ -10,28 +10,28 @@ Every preset also includes the account tools (`login`, `logout`, `verify-login`,
 
 | Preset        | Mode                                                             |      Tools |   Scopes | Org mode             | Description                                                                                                                       |
 | ------------- | ---------------------------------------------------------------- | ---------: | -------: | -------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `all`         | [full](#all-full)<br>[read only](#all-read-only)                 | 371<br>181 | 65<br>38 | -<br>-               | All available tools                                                                                                               |
+| `all`         | [full](#all-full)<br>[read only](#all-read-only)                 | 372<br>181 | 65<br>38 | -<br>-               | All available tools                                                                                                               |
 | `calendar`    | [full](#calendar-full)<br>[read only](#calendar-read-only)       |   48<br>23 |   7<br>5 | -<br>-               | Calendar and event management                                                                                                     |
 | `contacts`    | [full](#contacts-full)<br>[read only](#contacts-read-only)       |    15<br>7 |   1<br>1 | -<br>-               | Outlook contacts management                                                                                                       |
 | `excel`       | [full](#excel-full)<br>[read only](#excel-read-only)             |    25<br>9 |   1<br>1 | -<br>-               | Excel spreadsheet operations                                                                                                      |
-| `files`       | [full](#files-full)<br>[read only](#files-read-only)             |   26<br>14 |   3<br>2 | -<br>-               | OneDrive file and folder operations                                                                                               |
+| `files`       | [full](#files-full)<br>[read only](#files-read-only)             |   27<br>14 |   3<br>2 | -<br>-               | OneDrive file and folder operations                                                                                               |
 | `mail`        | [full](#mail-full)<br>[read only](#mail-read-only)               |   50<br>19 |   5<br>3 | -<br>-               | Email operations (read, send, manage folders, attachments)                                                                        |
-| `onedrive`    | [full](#onedrive-full)<br>[read only](#onedrive-read-only)       |   24<br>12 |   2<br>1 | -<br>-               | OneDrive app only: drive and file operations, excluding Excel                                                                     |
+| `onedrive`    | [full](#onedrive-full)<br>[read only](#onedrive-read-only)       |   25<br>12 |   2<br>1 | -<br>-               | OneDrive app only: drive and file operations, excluding Excel                                                                     |
 | `onenote`     | [full](#onenote-full)<br>[read only](#onenote-read-only)         |   29<br>17 |   5<br>2 | -<br>-               | OneNote notebook operations                                                                                                       |
 | `outlook`     | [full](#outlook-full)<br>[read only](#outlook-read-only)         |   97<br>37 |   8<br>6 | -<br>-               | Outlook app only: mail, calendar and contacts                                                                                     |
-| `personal`    | [full](#personal-full)<br>[read only](#personal-read-only)       |  178<br>74 | 20<br>15 | -<br>-               | Personal productivity tools (mail, calendar, files, contacts, tasks, notes, search)                                               |
+| `personal`    | [full](#personal-full)<br>[read only](#personal-read-only)       |  179<br>74 | 20<br>15 | -<br>-               | Personal productivity tools (mail, calendar, files, contacts, tasks, notes, search)                                               |
 | `search`      | [full](#search-full)<br>[read only](#search-read-only)           |     7<br>7 |   8<br>8 | -<br>-               | Microsoft Search capabilities                                                                                                     |
 | `tasks`       | [full](#tasks-full)<br>[read only](#tasks-read-only)             |   35<br>16 |   1<br>1 | -<br>-               | Task and planning tools (To Do, Planner)                                                                                          |
 | `teams`       | [full](#teams-full)<br>[read only](#teams-read-only)             |   73<br>43 | 31<br>18 | required<br>required | Teams app only: chats, channels, meetings and presence                                                                            |
 | `teams-write` | [full](#teams-write-full)<br>[read only](#teams-write-read-only) |    11<br>7 |   6<br>3 | required<br>required | Teams send-only: send/reply in chats and channels, list chats/teams/channels by name, activity notifications - no message reading |
 | `users`       | [full](#users-full)<br>[read only](#users-read-only)             |   11<br>11 |   4<br>4 | required<br>required | User directory access                                                                                                             |
-| `work`        | [full](#work-full)<br>[read only](#work-read-only)               | 191<br>111 | 55<br>33 | required<br>required | Organization/work tools (Teams, SharePoint, shared mailboxes, search)                                                             |
+| `work`        | [full](#work-full)<br>[read only](#work-read-only)               | 192<br>111 | 55<br>33 | required<br>required | Organization/work tools (Teams, SharePoint, shared mailboxes, search)                                                             |
 
 ## `all` full
 
 All available tools
 
-Tools (371):
+Tools (372):
 
 - `accept-calendar-event`
 - `add-calendar-event-attachment`
@@ -403,6 +403,7 @@ Tools (371):
 - `update-todo-task-list`
 - `upload-attachment-from-file`
 - `upload-file-content`
+- `upload-file-to-folder`
 - `upload-my-profile-photo`
 
 Scopes (65):
@@ -909,7 +910,7 @@ Scopes (1):
 
 OneDrive file and folder operations
 
-Tools (26):
+Tools (27):
 
 - `copy-drive-item`
 - `create-drive-item-preview`
@@ -937,6 +938,7 @@ Tools (26):
 - `search-onedrive-files`
 - `share-drive-item`
 - `upload-file-content`
+- `upload-file-to-folder`
 
 Scopes (3):
 
@@ -1071,7 +1073,7 @@ Scopes (3):
 
 OneDrive app only: drive and file operations, excluding Excel
 
-Tools (24):
+Tools (25):
 
 - `copy-drive-item`
 - `create-drive-item-preview`
@@ -1097,6 +1099,7 @@ Tools (24):
 - `search-onedrive-files`
 - `share-drive-item`
 - `upload-file-content`
+- `upload-file-to-folder`
 
 Scopes (2):
 
@@ -1371,7 +1374,7 @@ Scopes (6):
 
 Personal productivity tools (mail, calendar, files, contacts, tasks, notes, search)
 
-Tools (178):
+Tools (179):
 
 - `accept-calendar-event`
 - `add-calendar-event-attachment`
@@ -1550,6 +1553,7 @@ Tools (178):
 - `update-todo-task-list`
 - `upload-attachment-from-file`
 - `upload-file-content`
+- `upload-file-to-folder`
 - `upload-my-profile-photo`
 
 Scopes (20):
@@ -2097,7 +2101,7 @@ Organization/work tools (Teams, SharePoint, shared mailboxes, search)
 
 Requires `--org-mode`.
 
-Tools (191):
+Tools (192):
 
 - `add-group-member`
 - `add-group-owner`
@@ -2290,6 +2294,7 @@ Tools (191):
 - `update-sharepoint-site-onenote-page-content`
 - `update-team-channel`
 - `upload-attachment-from-file`
+- `upload-file-to-folder`
 
 Scopes (55):
 

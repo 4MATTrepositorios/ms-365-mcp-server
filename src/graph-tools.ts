@@ -1399,6 +1399,153 @@ function optionalContentId(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
+// upload-file-to-folder: create-only. `replace` is deliberately absent, so a shared
+// library file cannot be overwritten from a chat turn.
+const UPLOAD_FILE_ENCODINGS = ['text', 'base64'] as const;
+const UPLOAD_FILE_CONFLICT_BEHAVIORS = ['rename', 'fail'] as const;
+// The content travels as a tool argument through the agent's context, so keep it
+// small; bigger files belong to create-upload-session / get-upload-url.
+export const UPLOAD_FILE_MAX_BYTES = 4 * 1024 * 1024;
+const BASE64_BODY = /^[A-Za-z0-9+/]*={0,2}$/;
+
+/**
+ * Build the Graph path for creating `name` inside `folder` (path-based addressing:
+ * `{folder}:/{name}:/content`), with the conflict behavior pinned in the query.
+ * `folder` must already be a validated DRIVE_UPLOAD_TARGET.
+ */
+export function uploadFileEndpoint(
+  folder: string,
+  name: string,
+  conflictBehavior: (typeof UPLOAD_FILE_CONFLICT_BEHAVIORS)[number]
+): string {
+  return `${folder}:/${encodeURIComponent(name)}:/content?@microsoft.graph.conflictBehavior=${conflictBehavior}`;
+}
+
+async function uploadFileToFolder(
+  params: Record<string, unknown>,
+  ctx: UtilityToolContext
+): Promise<CallToolResult> {
+  const folder = typeof params.folder === 'string' ? params.folder.replace(/\/+$/, '') : '';
+  const name = params.name;
+  const content = params.content;
+  if (!folder || !DRIVE_UPLOAD_TARGET.test(folder) || !isPlainGraphPath(folder)) {
+    return uploadError(
+      'folder must be a drive folder: /sites/{site-id}/drive/root, /sites/{site-id}/drive/items/{folder-id}, /drives/{drive-id}/root, /drives/{drive-id}/items/{folder-id} or /me/drive/root.'
+    );
+  }
+  if (
+    typeof name !== 'string' ||
+    !name ||
+    cleanAttachmentName(name) !== name ||
+    DRIVE_NAME_FORBIDDEN.test(name) ||
+    name.endsWith('.') ||
+    !isEncodable(name)
+  ) {
+    return uploadError(
+      'name must be a plain file name: no " * : < > ? / \\ | characters, no leading or trailing spaces, not ending in "." and at most 255 characters, e.g. ata-reuniao.md.'
+    );
+  }
+  if (typeof content !== 'string') {
+    return uploadError('content is required and must be a string.');
+  }
+  const encoding =
+    params.encoding === undefined || params.encoding === '' ? 'text' : params.encoding;
+  if (!UPLOAD_FILE_ENCODINGS.includes(encoding as never)) {
+    return uploadError('encoding must be text or base64.');
+  }
+  const behavior =
+    params.conflictBehavior === undefined || params.conflictBehavior === ''
+      ? 'rename'
+      : params.conflictBehavior;
+  if (!UPLOAD_FILE_CONFLICT_BEHAVIORS.includes(behavior as never)) {
+    return uploadError(
+      'conflictBehavior must be rename or fail. This tool never overwrites an existing file.'
+    );
+  }
+
+  let bytes: Buffer;
+  if (encoding === 'base64') {
+    const compact = content.replace(/\s+/g, '');
+    if (compact.length % 4 !== 0 || !BASE64_BODY.test(compact)) {
+      return uploadError('content is not valid base64.');
+    }
+    bytes = Buffer.from(compact, 'base64');
+  } else {
+    bytes = Buffer.from(content, 'utf8');
+  }
+  if (bytes.length > UPLOAD_FILE_MAX_BYTES) {
+    return uploadError(
+      `content is ${bytes.length} bytes; this tool takes up to ${UPLOAD_FILE_MAX_BYTES}. Use create-upload-session for larger files.`
+    );
+  }
+  const contentType =
+    typeof params.contentType === 'string' && params.contentType.length > 0
+      ? params.contentType
+      : encoding === 'base64'
+        ? 'application/octet-stream'
+        : 'text/plain; charset=utf-8';
+  if (!UPLOAD_CONTENT_TYPE.test(contentType.split(';')[0].trim())) {
+    return uploadError('contentType must be a MIME type such as text/markdown or application/pdf.');
+  }
+
+  let accessToken: string | undefined;
+  if (typeof params.account === 'string' && params.account && ctx.authManager) {
+    accessToken = await ctx.authManager.getTokenForAccount(params.account);
+  }
+
+  const response = await ctx.graphClient.graphRequest(
+    uploadFileEndpoint(folder, name, behavior as (typeof UPLOAD_FILE_CONFLICT_BEHAVIORS)[number]),
+    {
+      method: 'PUT',
+      body: bytes,
+      headers: { 'Content-Type': contentType },
+      forceJsonOutput: true,
+      ...(accessToken ? { accessToken } : {}),
+    }
+  );
+  if (response.isError) {
+    const text =
+      response.content?.[0] && 'text' in response.content[0] ? response.content[0].text : '';
+    if (behavior === 'fail' && /nameAlreadyExists|409/.test(String(text))) {
+      return {
+        ...response,
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              error: `A file named ${name} already exists in this folder. Nothing was written. Call again with conflictBehavior rename, or another name.`,
+            }),
+          },
+        ],
+      };
+    }
+    return response;
+  }
+  let item: { id?: string; name?: string; webUrl?: string; size?: number } = {};
+  try {
+    const first = response.content?.[0];
+    item = JSON.parse(first && 'text' in first ? first.text : '{}');
+  } catch {
+    // Keep the raw response when Graph returned something unexpected.
+    return response;
+  }
+  return {
+    ...response,
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          id: item.id,
+          name: item.name,
+          webUrl: item.webUrl,
+          size: item.size,
+          renamed: typeof item.name === 'string' && item.name !== name,
+        }),
+      },
+    ],
+  };
+}
+
 /**
  * Mint an upload ticket for `target`, the `/attachments` collection of a draft
  * message or an event, redeemed by one PUT of the file bytes. Same identity
@@ -1839,6 +1986,62 @@ export const UTILITY_TOOLS: readonly UtilityTool[] = [
         params.conflictBehavior === '' ? undefined : params.conflictBehavior
       );
     },
+  },
+  {
+    name: 'upload-file-to-folder',
+    method: 'PUT',
+    path: 'tool:upload-file-to-folder',
+    searchKeywords:
+      'save file sharepoint library upload file to sharepoint folder create file document library team site save document onedrive folder new file write file',
+    description:
+      'Create a NEW file in a OneDrive or SharePoint document library folder, with the content passed inline (text, or base64 for binary files up to 4 MB). It never overwrites: with conflictBehavior rename (default) a taken name is saved as "name 1.ext", with fail the call is refused. folder is the target folder: /sites/{site-id}/drive/root (the site\'s default library), /sites/{site-id}/drive/items/{folder-id}, /drives/{drive-id}/root, /drives/{drive-id}/items/{folder-id}, or /me/drive/root. Find site-id with get-sharepoint-site-by-path, a library\'s drive-id with list-sharepoint-site-drives and a folder-id with list-folder-files. Returns { id, name, webUrl, size, renamed }.',
+    readOnlyHint: false,
+    openWorldHint: true,
+    buildSchema: (ctx) => {
+      const schema: Record<string, z.ZodTypeAny> = {
+        folder: z
+          .string()
+          .describe(
+            'Target folder: /sites/{site-id}/drive/root, /sites/{site-id}/drive/items/{folder-id}, /drives/{drive-id}/root, /drives/{drive-id}/items/{folder-id} or /me/drive/root.'
+          ),
+        name: z
+          .string()
+          .describe(
+            'File name with extension, e.g. ata-reuniao.md or proposta.docx. No " * : < > ? / \\ | characters.'
+          ),
+        content: z
+          .string()
+          .describe(
+            'File content: the text itself (encoding text), or the bytes as base64 (encoding base64).'
+          ),
+        encoding: z
+          .enum(UPLOAD_FILE_ENCODINGS)
+          .optional()
+          .describe('text (default, stored as UTF-8) or base64 for binary files.'),
+        contentType: z
+          .string()
+          .optional()
+          .describe(
+            'MIME type, e.g. text/markdown or application/pdf. Defaults to text/plain; charset=utf-8 for text and application/octet-stream for base64.'
+          ),
+        conflictBehavior: z
+          .enum(UPLOAD_FILE_CONFLICT_BEHAVIORS)
+          .optional()
+          .describe(
+            'When the folder already has a file with this name: rename (default) keeps both, fail refuses. Overwriting is not offered.'
+          ),
+      };
+      if (ctx.multiAccount) {
+        schema['account'] = z
+          .string()
+          .optional()
+          .describe(
+            'Account to use when multiple Microsoft accounts are configured. Required when multiple accounts exist (see list-accounts).'
+          );
+      }
+      return schema;
+    },
+    execute: async (params, ctx) => uploadFileToFolder(params, ctx),
   },
   {
     name: 'upload-attachment-from-file',

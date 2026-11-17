@@ -114,6 +114,8 @@ const SCOPED_UTILITY_TOOLS: Record<string, string[]> = {
   'get-download-url': ['files', 'onedrive', 'personal', 'work', 'search'],
   'get-upload-url': ['mail', 'calendar', 'outlook', 'files', 'onedrive', 'personal', 'work'],
   'upload-attachment-from-file': ['mail', 'calendar', 'outlook', 'personal', 'work'],
+  // Creates a file in a OneDrive/SharePoint folder; never overwrites.
+  'upload-file-to-folder': ['files', 'onedrive', 'personal', 'work'],
   'parse-teams-url': ['teams', 'teams-write', 'work'],
   'read-mail-text': ['mail', 'outlook', 'personal', 'work'],
 };
